@@ -81,5 +81,5 @@ if __name__ == '__main__':
     #bbox = {-125, 32, -113, 42}
 
     data = get_earthquakes(starttime=starttime, endtime=endtime, min_magnitude=6,limit= 5)
-    print(data)
+    #print(data)
 

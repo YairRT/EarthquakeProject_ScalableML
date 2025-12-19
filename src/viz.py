@@ -28,7 +28,7 @@ def freq_plot(df: pd.DataFrame, freq: str = 'D'):
     tmp = df.copy()
     tmp['time'] = pd.to_datetime(tmp['time'])
     counts = tmp.set_index('time').resample(freq).size().reset_index(name='count')
-    print(counts)
+    #print(counts)
     return px.line(counts, x='time',y='count')
 
 def mag_hist(df: pd.DataFrame, bins: int = 30):
@@ -47,7 +47,7 @@ if __name__=='__main__':
     endtime = end.strftime('%Y-%m-%d')
 
     df = get_earthquakes(starttime=starttime,endtime=endtime,min_magnitude=5,limit=200)
-    print(df.head())
+    #print(df.head())
 
     # Test map_plot
     fig1 = map_plot(df)
