@@ -1,11 +1,25 @@
 # Future improvements on the project can be implementing ETAS -> ML method
+# DBSCAN
 # Let's try logistic regression for now
+
 
 # To run file use: streamlit run app.py
 
 #import streamlit as st
 #st.title('Earthquake Risk Predictor')
 #st.write('Setup is working!')
+
+
+'''
+Missing tasks:
+1) Implement feature scripts
+2) Hopsworks connection
+3) Implement the ML scripts
+4) Deployment
+'''
+
+
+
 
 import streamlit as st
 import pandas as pd
@@ -26,7 +40,7 @@ def load_data(starttime:str, endtime:str, min_mag:float, bbox, limit:int = 10):
 # Let's define some regions to test
 REGIONS = {
     'Japan': (122,24,146,46),
-    'Mexico': (-118,14,-86-33),
+    'Mexico': (-118,14,-86,-33),
     'Chile': (-76,-56,-66,-17),
     'Global': None,    
 }
