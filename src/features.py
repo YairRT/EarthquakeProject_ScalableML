@@ -29,8 +29,8 @@ def compute_freq_series(df: pd.DataFrame, freq: str = 'D'):
         return pd.DataFrame({'time':[],'count':[]})
     
     tmp = df.copy()
-    tmp['time'] = pd.to_datetime(tmp['time'], utc=True, errors='coerce') # can be omitted
-    tmp = tmp.dropna(subset=['time']) # can be omitted
+    tmp['time'] = pd.to_datetime(tmp['time'], utc=True, errors='coerce')
+    tmp = tmp.dropna(subset=['time']) 
 
     counts = tmp.set_index('time').resample(freq).size().reset_index(name='count')
 
@@ -49,7 +49,7 @@ def add_seq_feat(df: pd.DataFrame):
     if out.empty:
         return out
     
-    out["time"] = pd.to_datetime(out["time"], utc=True, errors="coerce") # can be eliminated
+    #out["time"] = pd.to_datetime(out["time"], utc=True, errors="coerce") # can be eliminated
     out = out.dropna(subset=['time', 'latitude','longitude']).sort_values('time').reset_index(drop=True)
 
     # Time since previous event (hours)
@@ -135,13 +135,16 @@ if __name__=='__main__':
     df = get_earthquakes(starttime=starttime,endtime=endtime,min_magnitude=5,limit=200)
 
     print('Basic time features:')
-    print(basic_time_feats(df).head())
+    seq = basic_time_feats(df).head()
+    print(seq)
 
     print('\nFrequency series (daily)')
     print(compute_freq_series(df).head())
 
     print('\nSequence features:')
-    print(add_seq_feat(df).head())
+    seq = add_seq_feat(seq).head()
+    print(seq)
+    print(seq.columns)
 
     print('\nStatistics of depth')
     print(depth_stats(df))
