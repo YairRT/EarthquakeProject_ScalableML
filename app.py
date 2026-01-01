@@ -35,6 +35,13 @@ from src.viz import mag_hist, map_plot, freq_plot
 from src.usgs_client import get_earthquakes
 from src.features import add_seq_feat, basic_time_feats, mag_stats, depth_stats
 import time
+from src.labels import add_aftershock_label
+
+# Variables
+T_hours = 24
+R_km = 100
+limit_num_eartquakes = 1000
+max_mag = 8.0
 
 
 # Loading of earthquakes
@@ -63,7 +70,7 @@ st.sidebar.header('Query')
 region_name = st.sidebar.selectbox('Region', list(REGIONS.keys()), index=0)
 bbox = REGIONS[region_name] # type: ignore
 
-min_mag = st.sidebar.slider('Minimum magnitude', 0.0, 8.0, 3.0, 0.1) # min, max, starting, step
+min_mag = st.sidebar.slider('Minimum magnitude', 0.0, max_mag, 3.0, 0.1) # min, max, starting, step
 
 #days_back = st.sidebar.slider('Days back', 1, 30, 7) # We can change this slider later
 end_dt = datetime.now(timezone.utc)
@@ -71,7 +78,7 @@ start_dt = end_dt - timedelta(days=7)
 starttime = st.sidebar.text_input('Start (YYYY-MM-DD)', start_dt.strftime('%Y-%m-%d'))
 endtime = st.sidebar.text_input('End (YYYY-MM-DD)', end_dt.strftime('%Y-%m-%d'))
 
-limit = int(st.sidebar.number_input('Number of earthquakes', min_value=1, max_value=1000)) # type: ignore
+limit = int(st.sidebar.number_input('Number of earthquakes', min_value=1, max_value=limit_num_eartquakes)) # type: ignore
 
 auto_refresh = st.sidebar.checkbox('Auto-refresh', value=True)
 refresh_seconds = st.sidebar.slider('Refresh (seconds)', 10,300,60) # type: ignore
@@ -97,6 +104,9 @@ df_feat = add_seq_feat(df_feat)
 # Some metrics
 mstats = mag_stats(df_feat)
 dstats = depth_stats(df_feat)
+
+# Add aftershock label
+df_labeled = add_aftershock_label(df_feat, T_hours=T_hours, R_km=R_km)
 
 
 # Summary
@@ -144,6 +154,8 @@ with right:
 st.subheader('Raw events')
 
 if True:
+    st.subheader('Labeled events: aftershock count')
+    st.write(df_labeled['y_aftershock'].value_counts())
     st.subheader('Events + engineered features')
     st.dataframe(df_feat.sort_values('time', ascending=False), width='stretch') # type: ignore
 

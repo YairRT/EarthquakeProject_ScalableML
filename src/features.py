@@ -12,8 +12,8 @@ def basic_time_feats(df: pd.DataFrame):
     out['time'] = pd.to_datetime(out['time'], utc=True, errors='coerce')
     out = out.dropna(subset=['time']).sort_values('time').reset_index(drop=True)
 
-    out['hour'] = out['time'].dt.hour
-    out['dayofweek'] = out['time'].dt.dayofweek # Monday = 0
+    out['hour'] = out['time'].dt.hour # type: ignore
+    out['dayofweek'] = out['time'].dt.dayofweek # type: ignore # Monday = 0
     return out
 
 def compute_freq_series(df: pd.DataFrame, freq: str = 'D'):
