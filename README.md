@@ -2,6 +2,9 @@
 
 A machine learning application that predicts the probability of aftershocks for recent earthquakes. The app uses a trained logistic regression model to analyze earthquake data and flag high-risk events that are likely to trigger aftershocks.
 
+Visit the deployed app: https://earthquake-aftershock.app.cloud.cbh.kth.se/
+
+
 ![Main Dashboard](images/overview.png)
 
 ## 🎯 Purpose
