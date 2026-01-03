@@ -2,6 +2,8 @@
 
 A machine learning application that predicts the probability of aftershocks for recent earthquakes. The app uses a trained logistic regression model to analyze earthquake data and flag high-risk events that are likely to trigger aftershocks.
 
+![Main Dashboard](images/overview.png)
+
 ## 🎯 Purpose
 
 **Main Goal:** Identify earthquakes with high risk of aftershocks to help with early warning and risk assessment.
@@ -23,6 +25,8 @@ The app:
    - 🟡 **Yellow** = Medium Risk (30-50% probability)
    - 🟢 **Green** = Low Risk (0-30% probability)
 5. **Risk Warnings**: Automatically flags and displays details for earthquakes with >50% aftershock probability
+
+![Interactive Map](images/map.png)
 
 ## 📁 Project Structure
 
@@ -152,8 +156,30 @@ All Hopsworks functionality is cleanly separated in `src/hopsworks_client.py`.
 
 ## 📊 Understanding the Results
 
+The application provides a comprehensive dashboard with real-time earthquake data and risk predictions:
+
+- **Query Parameters** (Left Sidebar):
+  - Select region (Global, Japan, California, etc.)
+  - Set minimum magnitude threshold
+  - Choose date range for data collection
+  - Configure number of earthquakes to analyze
+  - Enable auto-refresh for continuous monitoring
+
+- **Statistics Overview**:
+  - Total events found
+  - Maximum magnitude
+  - Average depth
+  - Selected region
+
+- **Prediction Results**:
+  - Average risk across all events
+  - Maximum risk (highest risk event)
+  - Count of high-risk events (>50% probability)
+  - Count of very high-risk events (>70% probability)
+
 - **Map Colors**: 
   - Red dots = High aftershock risk (be cautious!)
+  - Orange dots = Medium-High risk
   - Green dots = Low aftershock risk
   
 - **Risk Warnings**: 
