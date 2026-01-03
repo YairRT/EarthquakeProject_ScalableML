@@ -4,16 +4,67 @@ import plotly.express as px
 def map_plot (df: pd.DataFrame):
     if df.empty:
         return None
-    fig = px.scatter_geo(df,
-                         lat='latitude',
-                         lon='longitude',
-                         size='magnitude',
-                         color='magnitude',
-                         hover_name='place',
-                         hover_data={'depth':True, 'time':True,'latitude':True, 'longitude':True},
-                         projection='natural earth',
-                         )
-    fig.update_layout(margin=dict(l=0,r=0,t=0,b=0))
+    
+    # Use prediction probability for color if available, otherwise use magnitude
+    has_predictions = 'p_aftershock' in df.columns and df['p_aftershock'].notna().any()
+    
+    if has_predictions:
+        # Create risk categories for better visualization
+        df_plot = df.copy()
+        df_plot['risk_level'] = pd.cut(
+            df_plot['p_aftershock'],
+            bins=[0, 0.3, 0.5, 0.7, 1.0],
+            labels=['Low (0-30%)', 'Medium (30-50%)', 'High (50-70%)', 'Very High (70-100%)']
+        )
+        
+        # Color map: Low = green, Medium = yellow, High = orange, Very High = red
+        color_map = {
+            'Low (0-30%)': '#2ecc71',      # Green
+            'Medium (30-50%)': '#f39c12',  # Orange/Yellow
+            'High (50-70%)': '#e67e22',     # Dark Orange
+            'Very High (70-100%)': '#e74c3c' # Red
+        }
+        
+        df_plot['risk_color'] = df_plot['risk_level'].map(color_map)
+        
+        hover_data = {
+            'depth': True, 
+            'time': True, 
+            'magnitude': True,
+            'p_aftershock': ':.1%',
+            'risk_level': True
+        }
+        
+        fig = px.scatter_geo(
+            df_plot,
+            lat='latitude',
+            lon='longitude',
+            size='magnitude',
+            color='risk_level',
+            color_discrete_map=color_map,
+            hover_name='place',
+            hover_data=hover_data,
+            projection='natural earth',
+            labels={'risk_level': 'Aftershock Risk Level'},
+            title='Earthquake Map - Color indicates Aftershock Risk'
+        )
+    else:
+        # Fallback to magnitude if no predictions
+        hover_data = {'depth': True, 'time': True, 'latitude': True, 'longitude': True}
+        fig = px.scatter_geo(
+            df,
+            lat='latitude',
+            lon='longitude',
+            size='magnitude',
+            color='magnitude',
+            color_continuous_scale='Viridis',
+            hover_name='place',
+            hover_data=hover_data,
+            projection='natural earth',
+            labels={'magnitude': 'Magnitude'}
+        )
+    
+    fig.update_layout(margin=dict(l=0,r=0,t=30,b=0))
     return fig
 
 def freq_plot(df: pd.DataFrame, freq: str = 'D'):

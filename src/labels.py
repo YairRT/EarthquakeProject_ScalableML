@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from features import haversine_km_convert
+from src.features import haversine_km_convert
 
 def add_aftershock_label(df: pd.DataFrame, T_hours: float = 24.0, R_km: float = 100.0,
                          min_aftershock_mag: float | None = None):
@@ -61,9 +61,9 @@ def add_aftershock_label(df: pd.DataFrame, T_hours: float = 24.0, R_km: float = 
 
 
 if __name__=='__main__':
-    from usgs_client import get_earthquakes
+    from src.usgs_client import get_earthquakes
     from datetime import datetime, timedelta
-    from features import basic_time_feats, compute_freq_series, add_seq_feat
+    from src.features import basic_time_feats, compute_freq_series, add_seq_feat
 
     days=30
 
