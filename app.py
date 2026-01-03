@@ -25,12 +25,28 @@ Missing tasks:
 4) Deployment
 '''
 
-
-
-
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta, timezone
+
+# CRITICAL: Load .env file BEFORE anything else
+# Try multiple paths to ensure we find it
+env_paths = [
+    Path('.env'),  # Current directory
+    Path('/app/.env'),  # Docker default
+    Path(__file__).parent / '.env',  # Same directory as app.py
+]
+
+for env_path in env_paths:
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path, override=True)
+        break
+else:
+    # If no .env found, try loading from current directory anyway
+    load_dotenv(override=True)
 from src.viz import mag_hist, map_plot, freq_plot
 from src.usgs_client import get_earthquakes
 from src.features import add_seq_feat, basic_time_feats, mag_stats, depth_stats
@@ -91,35 +107,23 @@ auto_refresh = st.sidebar.checkbox('Auto-refresh', value=True)
 refresh_seconds = st.sidebar.slider('Refresh (seconds)', 10,300,60) # type: ignore
 
 # Initialize session state for tracking query parameters
-if 'last_query' not in st.session_state:
-    st.session_state.last_query = None
-if 'last_auto_refresh' not in st.session_state:
-    st.session_state.last_auto_refresh = None
+# Initialize session state
+if 'query_params' not in st.session_state:
+    st.session_state.query_params = None
 
 # Check if query parameters have changed
-current_query = (region_name, min_mag, starttime, endtime, limit)
-query_changed = st.session_state.last_query != current_query
-auto_refresh_changed = st.session_state.last_auto_refresh != auto_refresh
+current_params = (region_name, starttime, endtime, min_mag, limit)
+query_changed = st.session_state.query_params != current_params
 
 # Determine if we should refresh data
-should_refresh = False
-if query_changed:
-    should_refresh = True
-    st.session_state.last_query = current_query
-elif auto_refresh:
-    # Only auto-refresh if enabled
-    should_refresh = True
-elif auto_refresh_changed and auto_refresh:
-    # User just enabled auto-refresh
-    should_refresh = True
+# Refresh if: query changed, auto-refresh enabled, or first load
+should_refresh = query_changed or auto_refresh or st.session_state.query_params is None
 
-st.session_state.last_auto_refresh = auto_refresh
-
-# Load data only if we should refresh
+# Load data if needed
 if should_refresh:
     data = load_data(starttime=starttime, endtime=endtime, min_mag=min_mag, bbox=bbox, limit=limit)
     st.session_state.data = data
-    st.session_state.query_params = (region_name, starttime, endtime, min_mag, limit)
+    st.session_state.query_params = current_params
 else:
     # Use cached data from session state
     if 'data' in st.session_state:
@@ -128,7 +132,7 @@ else:
         # First load
         data = load_data(starttime=starttime, endtime=endtime, min_mag=min_mag, bbox=bbox, limit=limit)
         st.session_state.data = data
-        st.session_state.query_params = (region_name, starttime, endtime, min_mag, limit)
+        st.session_state.query_params = current_params
 
 if data.empty:
     st.warning("No earthquakes found for the selected criteria. Try adjusting the date range or region.")
@@ -140,8 +144,7 @@ else:
     st.caption('Auto-refresh disabled - data frozen. Change query parameters or enable auto-refresh to update.')
 
 # Check if we need to reprocess (only if query changed or first time)
-current_params = (region_name, starttime, endtime, min_mag, limit)
-if 'processed_data' not in st.session_state or st.session_state.query_params != current_params:
+if query_changed or 'processed_data' not in st.session_state:
     with st.spinner("Generating predictions for selected query..."):
         # Process features
         df_feat = basic_time_feats(data)
@@ -159,13 +162,29 @@ if 'processed_data' not in st.session_state or st.session_state.query_params != 
                 pass  # Fail silently - not critical for user experience
         
         # Load model and generate predictions
+        # Use Streamlit cache to keep model and connection alive across reruns
         model = None
         if USE_HOPSWORKS:
             try:
-                model = load_model_from_hopsworks()
+                # Cache model loading to avoid re-login on every rerun
+                if 'cached_model' not in st.session_state:
+                    st.session_state.cached_model = load_model_from_hopsworks()
+                model = st.session_state.cached_model
+                
                 df_feat["p_aftershock"] = predict_aftershock_proba(model, df_feat)
                 df_labeled["p_aftershock"] = predict_aftershock_proba(model, df_labeled)
-            except Exception:
+            except Exception as e:
+                # Log error for debugging
+                import traceback
+                error_msg = str(e)
+                error_trace = traceback.format_exc()
+                # Store error in session state for debugging
+                st.session_state.model_load_error = error_msg
+                st.session_state.model_load_trace = error_trace
+                # Log to console for debugging
+                print(f"ERROR loading model: {error_msg}")
+                print(f"Traceback: {error_trace}")
+                # Don't show error to user, just continue without model
                 pass  # Model not available - predictions will be None
         
         # Cache processed data
@@ -187,6 +206,7 @@ dstats = depth_stats(df_feat)
 
 if auto_refresh:
     st.caption(f'Auto-refresh every {refresh_seconds}s')
+
 
 
 # ============================================================================
@@ -239,6 +259,7 @@ if model is not None and 'p_aftershock' in df_feat.columns and df_feat['p_afters
     if pred_very_high_risk > 0:
         st.error(f"🚨 **{pred_very_high_risk} earthquake(s) have VERY HIGH aftershock risk (probability > 70%)** - Exercise extreme caution!")
 elif model is None:
+    # Only show error to user if model is not available
     st.info("ℹ️ Model not available. Train a model using: `python scripts/train_model.py`")
 
 

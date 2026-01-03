@@ -18,7 +18,25 @@ from dotenv import load_dotenv
 # Load .env from project root (works even if script is run from different directory)
 project_root = Path(__file__).parent.parent
 env_path = project_root / '.env'
-load_dotenv(dotenv_path=env_path)
+
+# Try multiple paths in case we're in Docker or different working directory
+if not env_path.exists():
+    # Try current working directory
+    env_path = Path('.env')
+if not env_path.exists():
+    # Try /app/.env (Docker default)
+    env_path = Path('/app/.env')
+
+# Load .env file if it exists
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path, override=True)
+else:
+    # If .env doesn't exist, try loading from current directory anyway
+    load_dotenv(override=True)
+
+# Set HOPSWORKS_HOST if not already set (default to serverless)
+if not os.getenv("HOPSWORKS_HOST"):
+    os.environ["HOPSWORKS_HOST"] = "c.app.hopsworks.ai"
 
 # Fix for hopsworks/hsfs compatibility issue
 # hopsworks tries to import hsfs.hopsworks_udf which doesn't exist in newer versions
@@ -32,18 +50,77 @@ try:
         class DummyModule:
             udf = DummyUDF()
         hsfs.hopsworks_udf = DummyModule()
+    
+    # CRITICAL: Initialize Python engine BEFORE hopsworks.login() is called
+    # This prevents HSFS from trying to auto-detect Spark (which fails in Docker)
+    # The engine must be initialized before _provide_project() is called
+    try:
+        from hsfs.engine import init
+        init("python")
+    except (ImportError, AttributeError):
+        pass  # If init doesn't exist, continue anyway
 except (ImportError, AttributeError):
     pass  # If hsfs isn't available, continue anyway
+
+# CRITICAL: Initialize Python engine function
+# This must be called BEFORE any hopsworks.login() calls
+def _ensure_python_engine():
+    """Ensure HSFS Python engine is initialized before connecting to Hopsworks."""
+    try:
+        from hsfs.engine import init, get_instance
+        # Check if engine is already initialized
+        try:
+            get_instance()
+            # Engine already initialized, good!
+            return
+        except Exception:
+            # Engine not initialized, initialize it now
+            pass
+        
+        # Initialize Python engine explicitly
+        init("python")
+        
+        # Verify it worked
+        try:
+            engine = get_instance()
+            if engine is None:
+                raise RuntimeError("Failed to initialize Python engine - get_instance() returned None")
+        except Exception as e:
+            raise RuntimeError(f"Python engine initialization failed: {e}") from e
+    except ImportError as e:
+        raise ImportError(
+            "HSFS engine module not available. "
+            "Make sure hsfs[python] is installed: pip install 'hsfs[python]'"
+        ) from e
 
 # Constants
 FEATURE_GROUP_NAME = "earthquake_features"
 FEATURE_GROUP_VERSION = 1
 MODEL_NAME = "aftershock_logreg"
 
+# Global cache for connections (persists across function calls to avoid re-login)
+_model_registry_cache = None
+_feature_store_cache = None
+_hopsworks_project_cache = None
+
+def get_hopsworks_project_cached():
+    """Get cached Hopsworks project connection to avoid re-login on every call."""
+    global _hopsworks_project_cache
+    if _hopsworks_project_cache is None:
+        import hopsworks
+        api_key = os.getenv("HOPSWORKS_API_KEY")
+        if not api_key:
+            raise ValueError("HOPSWORKS_API_KEY not found")
+        # CRITICAL: Initialize Python engine BEFORE login
+        _ensure_python_engine()
+        os.environ["HOPSWORKS_ENGINE"] = "python"
+        _hopsworks_project_cache = hopsworks.login(api_key_value=api_key, engine="python")
+    return _hopsworks_project_cache
 
 def get_feature_store():
     """
     Get Hopsworks Feature Store connection.
+    Uses cached connection to avoid re-login on every Streamlit rerun.
     
     Returns:
         FeatureStore: Hopsworks feature store instance
@@ -52,27 +129,17 @@ def get_feature_store():
         ImportError: If hopsworks is not installed
         ValueError: If API key is not set
     """
-    # Use hopsworks.login() instead of hsfs.connection() for better compatibility
-    try:
-        import hopsworks
-    except ImportError:
-        raise ImportError("hopsworks is not installed. Install with: pip install hopsworks")
-    
-    api_key = os.getenv("HOPSWORKS_API_KEY")
-    if not api_key:
-        raise ValueError(
-            "HOPSWORKS_API_KEY not found. "
-            "Set it in .env file or as environment variable."
-        )
-    
-    # Use hopsworks.login() which is more reliable than hsfs.connection()
-    project = hopsworks.login(api_key_value=api_key)
-    return project.get_feature_store()
+    global _feature_store_cache
+    if _feature_store_cache is None:
+        project = get_hopsworks_project_cached()
+        _feature_store_cache = project.get_feature_store()
+    return _feature_store_cache
 
 
 def get_model_registry():
     """
     Get Hopsworks Model Registry connection.
+    Uses cached connection to avoid re-login on every Streamlit rerun.
     
     Returns:
         ModelRegistry: Hopsworks model registry instance
@@ -81,32 +148,11 @@ def get_model_registry():
         ImportError: If hopsworks is not installed
         ValueError: If API key is not set
     """
-    # The hopsworks_udf fix is already applied at module level
-    # so we can import hopsworks directly
-    try:
-        import hopsworks
-    except ImportError:
-        raise ImportError("hopsworks is not installed. Install with: pip install hopsworks")
-    except AttributeError as e:
-        # If there's still an AttributeError, the fix didn't work
-        # This shouldn't happen since we fix it at module level
-        if 'hopsworks_udf' in str(e):
-            raise ImportError(
-                "Hopsworks compatibility issue. "
-                "The hopsworks_udf fix failed. "
-                "Try updating hopsworks: pip install --upgrade hopsworks"
-            ) from e
-        raise
-    
-    api_key = os.getenv("HOPSWORKS_API_KEY")
-    if not api_key:
-        raise ValueError(
-            "HOPSWORKS_API_KEY not found. "
-            "Set it in .env file or as environment variable."
-        )
-    
-    project = hopsworks.login(api_key_value=api_key)
-    return project.get_model_registry()
+    global _model_registry_cache
+    if _model_registry_cache is None:
+        project = get_hopsworks_project_cached()
+        _model_registry_cache = project.get_model_registry()
+    return _model_registry_cache
 
 
 def save_features_to_hopsworks(df: pd.DataFrame) -> tuple[bool, str]:
@@ -254,6 +300,7 @@ def save_model_to_hopsworks(model, metrics: dict) -> bool:
 def load_model_from_hopsworks():
     """
     Load the latest model from Hopsworks Model Registry.
+    Uses cached connection to avoid re-login on every Streamlit rerun.
     
     Returns:
         model: Trained model (sklearn Pipeline)
@@ -263,6 +310,7 @@ def load_model_from_hopsworks():
     """
     import joblib
     
+    # Use cached model registry connection (avoids re-login on every call)
     mr = get_model_registry()
     models = mr.get_models(name=MODEL_NAME)
     

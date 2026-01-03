@@ -1,0 +1,13 @@
+services:
+  streamlit-app:
+    build: .
+    container_name: earthquake-predictor
+    ports:
+      - "8502:8501"
+    environment:
+      - HOPSWORKS_API_KEY=${HOPSWORKS_API_KEY}
+      - HOPSWORKS_ENGINE=python
+    env_file:
+      - .env
+    restart: unless-stopped
+
