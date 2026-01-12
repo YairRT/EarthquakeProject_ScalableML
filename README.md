@@ -31,6 +31,51 @@ The app:
 
 ![Interactive Map](images/map.png)
 
+## 📊 Data Source & Data Collection
+
+### Data Source: USGS Earthquake API
+
+The application uses the **United States Geological Survey (USGS) FDSNWS Event Web Service** as its primary data source. This is a publicly available, real-time earthquake monitoring service that provides comprehensive earthquake data from seismic networks worldwide.
+
+**API Endpoint:** `https://earthquake.usgs.gov/fdsnws/event/1/query`
+
+### Raw Data Captured
+
+For each earthquake event, we capture the following raw data from the USGS API:
+
+- **`time`** - Timestamp of the earthquake (UTC)
+- **`magnitude`** - Earthquake magnitude (Richter scale)
+- **`place`** - Human-readable location description
+- **`longitude`** - Geographic longitude (-180 to 180)
+- **`latitude`** - Geographic latitude (-90 to 90)
+- **`depth`** - Depth of the earthquake in kilometers
+- **`event_id`** - Unique USGS event identifier
+
+### Feature Engineering
+
+The raw data is then processed to create predictive features:
+
+**Basic Features:**
+- `magnitude` - Direct from USGS
+- `depth` - Direct from USGS
+- `hour` - Hour of day (0-23)
+- `dayofweek` - Day of week (0=Monday, 6=Sunday)
+
+**Sequence Features:**
+- `time_since_prev_hours` - Hours since the previous earthquake
+- `distance_to_prev_km` - Distance to previous earthquake (Haversine formula)
+- `rolling_count_6h` - Number of earthquakes in the last 6 hours
+- `rolling_count_24h` - Number of earthquakes in the last 24 hours
+
+### Data Storage
+
+All collected data (raw + engineered features) is stored in **Hopsworks Feature Store** for:
+- Model training and retraining
+- Historical analysis
+- Feature versioning and reproducibility
+
+The app automatically saves new earthquake data to the Feature Store each time it runs, enabling continuous model improvement as more data becomes available.
+
 ## 📁 Project Structure
 
 * `app.py` - Main Streamlit application (user interface)
